@@ -1,0 +1,71 @@
+pipeline{
+    agent any
+    
+    parameters{
+        string(name: 'TAG')
+    }
+    
+    tools{
+        maven 'Maven'
+    }
+    stages{
+        stage("git clone"){
+            steps{
+                git url: "ssh://git@172.32.0.135:2222/source/VectorDemoBranch.git"
+            }
+        }
+         stage("git checkout"){
+            steps{
+                dir('/var/jenkins_home/workspace/VectorDemo'){
+                    withEnv(["TAG=${params.TAG}"]){
+                    echo "Hello ${TAG}"
+                    sh "git checkout ${TAG}"
+                    }
+                }
+            }
+        }
+    
+        stage("mvn build"){
+            steps{
+                sh 'mvn clean install'
+            }
+        }
+        /*stage("copy war file"){
+            steps{
+                script{
+                    sh 'cp /var/jenkins_home/workspace/VectorDemo/target/VectorApp.war /usr/src'
+                }
+            }
+        }*/
+        stage("test war file"){
+            steps{
+                dir('/var/jenkins_home/workspace/VectorDemo/target'){
+                    script{
+                    sh 'java -jar VectorApp.war > app.log 2>&1 &'
+                    def java_pid= sh(script: 'pgrep -f "java -jar VectorApp.war" | grep -v grep',returnStdout:true).trim()
+                    echo "java process id: ${java_pid}"
+                    sleep 15
+                    sh 'head -n 30 app.log > captured.log'
+                    sh "cat captured.log"
+                    sh "kill ${java_pid}"
+                    sleep 10
+                    
+                   /* echo "${captured_log.txt}" */
+                    if (sh(script: 'grep "log4j" captured.log',returnStatus: true) == 0){
+                        echo "The string 'log4j is present in the logs."
+                    }else{
+                        error "The string 'log4j is not present in the logs. Failing the pipeline"
+                    }
+                    }
+                }
+            }
+        }
+    }
+    /*post{
+         success{
+                 script{
+                         sh 'cp /var/jenkins_home/workspace/VectorDemo/target/VectorApp.war //home/c4cimark/artifacts/'
+            }
+        }
+    }*/
+}
