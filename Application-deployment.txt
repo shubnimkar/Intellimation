@@ -1,0 +1,114 @@
+pipeline {
+    agent any
+    
+    environment {
+        PASSWORD = credentials('windows-password')
+        PASSWORDADM = credentials('windows-key')
+        WINDOWS_HOST = '172.32.0.141' // Replace this with your Windows machine IP or hostname
+        WINDOWS_USERNAME = 'rutuja.dahatonde' // Replace this with your Windows username
+        SCRIPT_START = "\\\\imslprad02\\backup\\Area51\\ftpdownload\\Jenkins\\Application_deployment\\Application_folder\\starthttpd.bat" // Replace with script location
+        SCRIPT_STOP = "\\\\imslprad02\\backup\\Area51\\ftpdownload\\Jenkins\\Application_deployment\\Application_folder\\stophttpd.bat" // Replace with script location
+        SCRIPT_STATUS = "\\\\imslprad02\\backup\\Area51\\ftpdownload\\Jenkins\\Application_deployment\\Application_folder\\status.bat" // Replace with script location
+        SHARED_FOLDER = "\\\\imslprad02\\backup\\Area51\\ftpdownload\\Jenkins\\Application_deployment" // Location of shared folder
+        NEXUS_URL = "https://github.com/shubnimkar/Intellimation/archive/refs/heads/master.zip" //Your Nexus URL
+    }
+
+    
+    stages {
+        
+        stage('Clean WorkSpace'){
+            steps{
+                cleanWs()
+            }
+        }
+        
+        stage('Copy sshpass'){
+            
+        // This Stage is not required if you have sshpass installed on your jenkins machine, if not then implement this.
+            steps{
+                script{
+                     sh "cp /var/jenkins_home/sshpass /var/jenkins_home/workspace/Application-deployment"
+                }
+            }
+        }
+   
+    
+        stage('Download & Unzip Nexus Folder') {
+            
+        // Download your files from Nexus
+                 steps {
+                    sh 'curl -LOk $NEXUS_URL && unzip -o master.zip' 
+                }
+        }
+        
+        stage('Copy Downloaded file to destination folder') {
+            
+            // Copying files downloaded from nexus to shared location 
+            steps {
+                
+                script {
+                     sh "echo ${PASSWORD} | pscp -r -v /var/jenkins_home/workspace/Application-deployment/Intellimation-master/  rutuja.dahatonde@${WINDOWS_HOST}://imslprad02/backup/Area51/ftpdownload/Jenkins/Application_deployment/Application_folder"
+                    sh "echo ${PASSWORD} | pscp -r -v /var/jenkins_home/workspace/Application-deployment/Intellimation-master/segregation.bat  rutuja.dahatonde@${WINDOWS_HOST}://imslprad02/backup/Area51/ftpdownload/Jenkins/Application_deployment/backups"
+                    
+                }
+            }    
+                
+        }
+        
+        stage('Status of Service') {
+            steps {
+                script {
+                     sh" ./sshpass -p $PASSWORDADM ssh -o StrictHostKeyChecking=no dc.support@172.32.0.141 'cmd /c $SCRIPT_STATUS'"
+      
+                }
+            }
+        }
+        
+        
+        stage('Stop Service') {
+            steps {
+                script {
+                     sh" ./sshpass -p $PASSWORDADM ssh -o StrictHostKeyChecking=no dc.support@172.32.0.141 'cmd /c $SCRIPT_STOP'"
+      
+                }
+            }
+        }
+
+        stage('Application Folder Backup') {
+            
+            // To work in shared location we are using "net use" 
+            steps {
+                script {
+                    
+                    // Generate timestamp
+                    def timestamp = new Date().format('yyyy-MM-dd_HH-mm-ss')
+                    
+                    // Map network drive to access shared folder
+                    sh "./sshpass -p ${PASSWORD} ssh ${WINDOWS_USERNAME}@${WINDOWS_HOST} 'net use Z: $SHARED_FOLDER && mkdir Z:\\Backups\\Backup_${timestamp}  '"
+                    sh "./sshpass -p ${PASSWORD} ssh ${WINDOWS_USERNAME}@${WINDOWS_HOST} 'net use Z: $SHARED_FOLDER && copy Z:\\Application_folder Z:\\Backups\\Backup_${timestamp} && Z: /delete ' "
+                    
+                }
+            }
+        }
+        
+        stage('Start Service') {
+            steps {
+                script {
+                     sh" ./sshpass -p $PASSWORDADM ssh -o StrictHostKeyChecking=no dc.support@172.32.0.141 'cmd /c $SCRIPT_START'"
+      
+                }
+            }
+        }
+        
+        stage('Status ') {
+            steps {
+                script {
+                     sh" ./sshpass -p $PASSWORDADM ssh -o StrictHostKeyChecking=no dc.support@172.32.0.141 'cmd /c $SCRIPT_STATUS'"
+      
+                }
+            }
+        }
+        
+    
+    }
+}
