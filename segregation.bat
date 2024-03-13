@@ -8,3 +8,4 @@ for /f "tokens=*" %%a in ('dir /ad /b /o-n backup_*') do (
 )
 :done
 echo Latest folder: %latest_backup%
+pause
