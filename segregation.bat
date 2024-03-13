@@ -12,6 +12,6 @@ for /f "tokens=*" %%a in ('dir /ad /b /o-n backup_*') do (
         set "latest_backup=!folder!"
     )
 )
-echo Latest folder: %latest_backup%
+echo %latest_backup%
 pause
 popd
